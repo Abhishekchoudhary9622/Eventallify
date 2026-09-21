@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       .events()
       .find({
         date: { $gte: new Date() },
-        status: { $in: ["published", undefined] },
+        status: "published",
       })
       .sort({ date: 1 })
       .limit(20)
