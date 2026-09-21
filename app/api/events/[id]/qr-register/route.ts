@@ -87,10 +87,7 @@ export async function POST(
       userId: session.user.id,
       eventId: id,
       status: "confirmed",
-
-      // Required by RegistrationDoc schema
       verificationToken: crypto.randomUUID(),
-
       qrCode: null,
       checkedIn: false,
       checkedInAt: null,

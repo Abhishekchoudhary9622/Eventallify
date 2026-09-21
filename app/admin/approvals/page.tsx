@@ -233,18 +233,18 @@ export default function AdminApprovalsPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Capacity:</span>{" "}
-                  <span className="font-semibold text-foreground">{selectedEvent.capacity} seats</span>
+                  <span className="font-semibold text-foreground">{selectedEvent.maxParticipants || selectedEvent.capacity || "Unlimited"} seats</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Date:</span>{" "}
                   <span className="font-semibold text-foreground">
-                    {format(new Date(selectedEvent.startDate), "MMM d, yyyy • h:mm a")}
+                    {format(new Date(selectedEvent.date || selectedEvent.startDate), "MMM d, yyyy • h:mm a")}
                   </span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Host Department:</span>{" "}
+                  <span className="text-muted-foreground">Host:</span>{" "}
                   <span className="font-semibold text-foreground">
-                    {selectedEvent.organizer?.department || "General"}
+                    {selectedEvent.organizerName || selectedEvent.organizer?.department || selectedEvent.organizer?.name || "General"}
                   </span>
                 </div>
               </div>
@@ -359,20 +359,20 @@ function ApprovalCard({
             <Badge variant="secondary" className="text-[10px]">
               {event.category}
             </Badge>
-            <span className="text-xs text-muted-foreground">Club: {event.organizer?.name}</span>
+            <span className="text-xs text-muted-foreground">Club: {event.organizerName || event.organizer?.name || "Campus Club"}</span>
           </div>
 
           <h3 className="font-bold text-base line-clamp-1">{event.title}</h3>
 
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
             <span className="flex items-center gap-1">
-              <Calendar className="size-3 text-primary" /> {format(new Date(event.startDate), "MMM d, yyyy")}
+              <Calendar className="size-3 text-primary" /> {format(new Date(event.date || event.startDate), "MMM d, yyyy")}
             </span>
             <span className="flex items-center gap-1">
               <MapPin className="size-3 text-primary" /> {event.venue}
             </span>
             <span className="flex items-center gap-1">
-              <Users className="size-3 text-primary" /> {event.capacity} seats
+              <Users className="size-3 text-primary" /> {event.maxParticipants || event.capacity || "Open"} seats
             </span>
           </div>
         </div>

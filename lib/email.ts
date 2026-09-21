@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import nodemailer, { type Transporter } from "nodemailer";
 import QRCode from "qrcode";
 
 const SMTP_HOST = process.env.SMTP_HOST || "smtp-relay.brevo.com";
@@ -16,7 +16,7 @@ const FROM_EMAIL =
   process.env.EMAIL_FROM || "Eventallify <eventlifynoreply@gmail.com>";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
-function getTransporter(): nodemailer.Transporter | null {
+function getTransporter(): Transporter | null {
   const host = process.env.SMTP_HOST || "smtp-relay.brevo.com";
   const port = parseInt(process.env.SMTP_PORT || "587");
   const user =

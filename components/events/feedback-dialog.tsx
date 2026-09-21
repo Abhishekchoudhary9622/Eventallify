@@ -14,24 +14,39 @@ import { Star } from "lucide-react";
 import { toast } from "sonner";
 
 interface FeedbackDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  open?: boolean;
+  isOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onClose?: () => void;
   eventId: string;
   eventTitle: string;
   existingRating?: number;
   existingComment?: string;
   onSuccess?: () => void;
+  onSubmitted?: () => void;
 }
 
 export function FeedbackDialog({
   open,
+  isOpen,
   onOpenChange,
+  onClose,
   eventId,
   eventTitle,
   existingRating = 5,
   existingComment = "",
   onSuccess,
+  onSubmitted,
 }: FeedbackDialogProps) {
+  const isDialogOpen = open !== undefined ? open : isOpen !== undefined ? isOpen : false;
+  const handleOpenChange = (newOpen: boolean) => {
+    onOpenChange?.(newOpen);
+    if (!newOpen && onClose) onClose();
+  };
+  const handleSuccessCallback = () => {
+    onSuccess?.();
+    onSubmitted?.();
+  };
   const [rating, setRating] = useState(existingRating);
   const [hoverRating, setHoverRating] = useState(0);
   const [comment, setComment] = useState(existingComment);
@@ -58,8 +73,8 @@ export function FeedbackDialog({
       }
 
       toast.success("Thank you for rating this event!");
-      onSuccess?.();
-      onOpenChange(false);
+      handleSuccessCallback();
+      handleOpenChange(false);
     } catch {
       toast.error("Could not submit feedback");
     } finally {
@@ -68,7 +83,7 @@ export function FeedbackDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md p-6 bg-card border-border/80">
         <DialogHeader className="space-y-2">
           <DialogTitle className="text-xl font-bold">Rate & Review Event</DialogTitle>
@@ -132,7 +147,7 @@ export function FeedbackDialog({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleOpenChange(false)}
             >
               Cancel
             </Button>

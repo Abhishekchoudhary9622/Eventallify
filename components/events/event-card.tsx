@@ -28,7 +28,17 @@ export interface EventCardData {
   status?: string;
 }
 
-export function EventCard({ event }: { event: EventCardData }) {
+export interface EventCardProps {
+  event: EventCardData;
+  isBookmarkedInitial?: boolean;
+  onBookmarkToggle?: (isBookmarked: boolean) => void;
+}
+
+export function EventCard({
+  event,
+  isBookmarkedInitial = false,
+  onBookmarkToggle,
+}: EventCardProps) {
   const eventId = event._id || event.id || "";
   const rawDate = event.startDate || event.date;
 

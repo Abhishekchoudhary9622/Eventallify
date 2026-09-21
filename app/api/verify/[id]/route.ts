@@ -11,12 +11,11 @@ export async function GET(
     const { id } = await params;
     const cleanId = id.trim();
 
-    // Find certificate using either certificate ID or verification code
     const cert = await collections.certificates().findOne({
       $or: [
         { id: cleanId },
-        { id: cleanId.toUpperCase() },
         { verificationCode: cleanId },
+        { id: cleanId.toUpperCase() },
         { verificationCode: cleanId.toUpperCase() },
       ],
     });
@@ -31,14 +30,11 @@ export async function GET(
       );
     }
 
-    // Find the associated event
-    let event = null;
-
-    if (cert.eventId) {
-      event = await collections.events().findOne({
-        id: cert.eventId,
-      });
-    }
+    const event = cert.eventId
+      ? await collections.events().findOne({
+          id: cert.eventId,
+        })
+      : null;
 
     return NextResponse.json({
       valid: true,
@@ -48,8 +44,8 @@ export async function GET(
         certificateNumber: cert.id,
         studentName: cert.studentName,
         userName: cert.studentName,
-        userEmail: cert.studentEmail,
         studentEmail: cert.studentEmail,
+        userEmail: cert.studentEmail,
         eventTitle: cert.eventTitle,
         eventId: cert.eventId,
         eventDate: cert.eventDate,
@@ -57,7 +53,6 @@ export async function GET(
         issuedAt: cert.issuedAt,
         organizerName: cert.organizerName,
         verificationCode: cert.verificationCode,
-        qrVerifyPayload: cert.verificationCode,
         venue: event?.venue || "Campus Main Hall",
         category: event?.category || "Workshop",
       },

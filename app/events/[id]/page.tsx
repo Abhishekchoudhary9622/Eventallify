@@ -38,6 +38,7 @@ import { FeedbackDialog } from "@/components/events/feedback-dialog";
 
 interface EventDetail {
   id: string;
+  createdBy: string;
   title: string;
   shortDescription?: string;
   description: string;

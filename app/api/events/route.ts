@@ -46,8 +46,8 @@ export async function GET(request: NextRequest) {
     } else if (statusParam) {
       filter.status = statusParam;
     } else if (!isAdmin) {
-      // Students / Public only see published or completed events
-      filter.status = { $in: ["published", "completed", "approved", undefined] };
+      // Students / Public only see published, completed, or approved events
+      filter.status = { $in: ["published", "completed", "approved"] };
     }
 
     const eventsCol = collections.events();

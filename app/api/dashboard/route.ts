@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       collections.events().countDocuments(),
       collections.events().countDocuments({
-        $or: [{ startDate: { $gte: now } }, { date: { $gte: now } }],
+        date: { $gte: now },
       }),
       collections.registrations().countDocuments(),
       collections.users().countDocuments(),

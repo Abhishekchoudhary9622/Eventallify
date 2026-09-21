@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
       .events()
       .find({
         date: { $gte: new Date() },
-        status: "published",
+        status: { $in: ["published", "approved"] },
       })
       .sort({ date: 1 })
       .limit(20)
@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
     );
 
     const enriched = recs
-      .map((recommendation: { id: string; matchReason: string }) => {
+      .map((recommendation: any) => {
         const event = eventMap.get(recommendation.id);
 
         if (!event) {

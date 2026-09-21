@@ -90,7 +90,33 @@ export default function MyEventsPage() {
       const res = await fetch("/api/registrations");
       if (res.ok) {
         const data = await res.json();
-        setRegistrations(data.registrations || []);
+        const rawList = Array.isArray(data) ? data : data.registrations || [];
+        const normalized: MyRegistration[] = rawList.map((r: any) => ({
+          _id: r.id || r._id || r.registrationId,
+          userId: r.userId || session?.user?.id || "",
+          userName: r.studentName || r.userName || session?.user?.name || "",
+          userEmail: r.studentEmail || r.userEmail || session?.user?.email || "",
+          status: r.status || "confirmed",
+          waitlistPosition: r.waitlistPosition,
+          qrPayload: r.qrCode || "",
+          registeredAt: r.registeredAt || new Date().toISOString(),
+          checkedInAt: r.checkedInAt,
+          event: r.event || {
+            _id: r.eventId || r.id,
+            title: r.eventTitle || r.title || "Campus Event",
+            description: r.eventDescription || r.description || "",
+            category: r.eventCategory || r.category || "General",
+            startDate: r.eventDate || r.date || r.startDate || new Date().toISOString(),
+            endDate: r.eventEndDate || r.endDate,
+            venue: r.eventVenue || r.venue || "Campus Venue",
+            organizer: {
+              name: r.organizerName || "Event Organizer",
+            },
+            image: r.eventImageUrl || r.imageUrl,
+            status: "published",
+          },
+        }));
+        setRegistrations(normalized);
       }
     } catch (err) {
       console.error("Failed to load registrations:", err);
@@ -128,7 +154,8 @@ export default function MyEventsPage() {
       const res = await fetch("/api/certificates");
       if (res.ok) {
         const data = await res.json();
-        const found = (data.certificates || []).find((c: any) => c.eventId === eventId);
+        const certsList = Array.isArray(data) ? data : data.certificates || [];
+        const found = certsList.find((c: any) => c.eventId === eventId);
         if (found) {
           setCertData(found);
           return;

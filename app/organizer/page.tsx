@@ -235,7 +235,7 @@ export default function OrganizerDashboardPage() {
                         )}
                       </div>
 
-                      <Link href={`/events/${event._id}`}>
+                      <Link href={`/events/${event.id || event._id}`}>
                         <h3 className="font-bold text-lg hover:text-primary transition-colors line-clamp-1">
                           {event.title}
                         </h3>
@@ -244,7 +244,7 @@ export default function OrganizerDashboardPage() {
                       <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                         <div className="flex items-center gap-1.5">
                           <Calendar className="size-3.5 text-primary" />
-                          <span>{format(new Date(event.startDate), "MMM d, yyyy • h:mm a")}</span>
+                          <span>{format(new Date(event.date || event.startDate), "MMM d, yyyy • h:mm a")}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <MapPin className="size-3.5 text-primary" />

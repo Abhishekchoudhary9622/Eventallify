@@ -289,12 +289,12 @@ export default function EventAnalyticsPage({ params }: { params: Promise<{ id: s
                   <span className="font-medium text-foreground">{eventData?.venue}</span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
-                  <span>Host Club:</span>
-                  <span className="font-medium text-foreground">{eventData?.organizer?.name}</span>
+                  <span>Host:</span>
+                  <span className="font-medium text-foreground">{eventData?.organizerName || eventData?.organizer?.name || "Event Organizer"}</span>
                 </div>
                 <div className="flex justify-between border-b pb-2">
                   <span>Event Date:</span>
-                  <span>{eventData?.startDate ? format(new Date(eventData.startDate), "MMM d, yyyy") : "TBD"}</span>
+                  <span>{eventData?.date || eventData?.startDate ? format(new Date(eventData.date || eventData.startDate), "MMM d, yyyy") : "TBD"}</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Status:</span>

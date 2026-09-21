@@ -71,7 +71,7 @@ export async function ensureIndexes() {
     const certsCol = collections.certificates();
     const feedbackCol = collections.feedback();
 
-    await eventsCol.createIndex({ startDate: -1 });
+    await eventsCol.createIndex({ date: -1 });
     await eventsCol.createIndex({ status: 1 });
     await eventsCol.createIndex({ createdBy: 1 });
     await eventsCol.createIndex({ id: 1 }, { unique: true, sparse: true });
@@ -80,7 +80,6 @@ export async function ensureIndexes() {
     await regCol.createIndex({ userId: 1 });
     await regCol.createIndex({ eventId: 1, status: 1 });
     await regCol.createIndex({ id: 1 }, { unique: true, sparse: true });
-    await regCol.createIndex({ registrationId: 1 }, { sparse: true });
 
     await annCol.createIndex({ createdAt: -1 });
     await annCol.createIndex({ eventId: 1 });
@@ -92,7 +91,8 @@ export async function ensureIndexes() {
     await notifsCol.createIndex({ userId: 1, read: 1 });
     await notifsCol.createIndex({ userId: 1, createdAt: -1 });
 
-    await certsCol.createIndex({ certificateNumber: 1 }, { unique: true, sparse: true });
+    await certsCol.createIndex({ id: 1 }, { unique: true, sparse: true });
+    await certsCol.createIndex({ verificationCode: 1 }, { unique: true, sparse: true });
     await certsCol.createIndex({ userId: 1, eventId: 1 });
 
     await feedbackCol.createIndex({ eventId: 1 });
