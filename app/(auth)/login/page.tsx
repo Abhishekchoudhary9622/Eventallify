@@ -21,7 +21,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirect = searchParams.get("redirect") || "/dashboard";
 
-  const [email, setEmail] = useState("");
+  const initialEmail = searchParams.get("email") || "";
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,9 +33,11 @@ function LoginForm() {
     setLoading(true);
     setError("");
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     const { data: signInData, error: signInError } =
       await authClient.signIn.email({
-        email,
+        email: normalizedEmail,
         password,
       });
 

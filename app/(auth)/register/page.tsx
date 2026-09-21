@@ -63,14 +63,31 @@ function RegisterForm() {
 
     setLoading(true);
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const cleanName = name.trim();
+
     try {
       const { error } = await authClient.signUp.email({
-        email,
+        email: normalizedEmail,
         password,
-        name,
+        name: cleanName,
       });
 
       if (error) {
+        const errorMsg = error.message?.toLowerCase() || "";
+        if (
+          errorMsg.includes("already") ||
+          errorMsg.includes("exists") ||
+          error.status === 400 ||
+          error.status === 422
+        ) {
+          toast.info("An account with this email already exists. Redirecting to sign in...");
+          setTimeout(() => {
+            router.push(`/login?email=${encodeURIComponent(normalizedEmail)}`);
+          }, 1500);
+          setLoading(false);
+          return;
+        }
         toast.error(error.message || "Registration failed");
         setLoading(false);
         return;
@@ -79,7 +96,7 @@ function RegisterForm() {
       // Also trigger OTP send to ensure user receives the OTP verification email
       try {
         await authClient.emailOtp.sendVerificationOtp({
-          email,
+          email: normalizedEmail,
           type: "email-verification",
         });
       } catch {
