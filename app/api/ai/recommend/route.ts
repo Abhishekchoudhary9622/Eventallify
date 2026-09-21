@@ -59,19 +59,20 @@ export async function GET(request: NextRequest) {
       upcomingEvents,
     });
 
-    const eventMap = new Map(upcomingEvents.map((e) => [e.id, e]));
+ const eventMap = new Map(upcomingEvents.map((e) => [e.id, e]));
+const enriched = recs
+  .map((r: { id: string; matchReason: string }) => {
+    const ev = eventMap.get(r.id);
 
-    const enriched = recs
-      .map((r) => {
-        const ev = eventMap.get(r.id);
-        if (!ev) return null;
-        return {
-          ...ev,
-          imageUrl: getEventImageUrl(ev.imageUrl, ev.category),
-          matchReason: r.matchReason,
-        };
-      })
-      .filter(Boolean);
+    if (!ev) return null;
+
+    return {
+      ...ev,
+      imageUrl: getEventImageUrl(ev.imageUrl, ev.category),
+      matchReason: r.matchReason,
+    };
+  })
+  .filter(Boolean);
 
     return NextResponse.json({ recommendations: enriched });
   } catch (error) {
