@@ -33,15 +33,10 @@ const globalForMongo = globalThis as unknown as {
   _indexesCreated?: boolean;
 };
 
-if (process.env.NODE_ENV === "development") {
-  if (!globalForMongo._mongoClient) {
-    globalForMongo._mongoClient = new MongoClient(uri, options);
-  }
-  client = globalForMongo._mongoClient;
-} else {
-  client = new MongoClient(uri, options);
+if (!globalForMongo._mongoClient) {
+  globalForMongo._mongoClient = new MongoClient(uri, options);
 }
-
+client = globalForMongo._mongoClient;
 db = client.db();
 
 // Helper functions for typed collections

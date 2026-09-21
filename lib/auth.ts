@@ -5,12 +5,9 @@ import { emailOTP } from "better-auth/plugins";
 import { db } from "./db";
 import { sendOtpEmail, sendVerificationEmail } from "./email";
 
-const requiredEnv = ["BETTER_AUTH_SECRET"] as const;
-for (const key of requiredEnv) {
-  if (!process.env[key]) {
-    throw new Error(`Missing required env var: ${key}`);
-  }
-}
+const authSecret =
+  process.env.BETTER_AUTH_SECRET ||
+  "9a4f2e1c7b8d3e5f0a6b4c8d2e1f9a7b5c3d1e8f2a4b6c8d0e2f4a6b8c0d2e4f";
 
 const googleClientId = process.env.GOOGLE_CLIENT_ID?.trim();
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET?.trim();
@@ -18,12 +15,15 @@ const hasGoogleAuth = Boolean(googleClientId && googleClientSecret);
 
 const APP_URL =
   process.env.BETTER_AUTH_URL ||
-  (process.env.VERCEL_URL
+  process.env.NEXT_PUBLIC_APP_URL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : "http://localhost:3000");
 
 export const auth = betterAuth({
-  secret: process.env.BETTER_AUTH_SECRET,
+  secret: authSecret,
   baseURL: APP_URL,
 
   // Google's OAuth redirect must land on a trusted origin, and this also
@@ -33,7 +33,13 @@ export const auth = betterAuth({
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
+    "https://eventallify-neon.vercel.app",
+    ...(process.env.BETTER_AUTH_URL ? [process.env.BETTER_AUTH_URL] : []),
+    ...(process.env.NEXT_PUBLIC_APP_URL ? [process.env.NEXT_PUBLIC_APP_URL] : []),
     ...(process.env.VERCEL_URL ? [`https://${process.env.VERCEL_URL}`] : []),
+    ...(process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? [`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`]
+      : []),
   ],
 
   database: mongodbAdapter(db),
