@@ -9,14 +9,17 @@ export async function POST(
 ) {
   try {
     await ensureIndexes();
+
     const session = await auth.api.getSession({
       headers: request.headers,
     });
 
     if (!session) {
       const { id } = await params;
+
       const loginUrl = new URL("/login", request.url);
       loginUrl.searchParams.set("redirect", `/events/${id}?qr=1`);
+
       return NextResponse.json(
         {
           error: "Please sign in to register",
@@ -84,6 +87,10 @@ export async function POST(
       userId: session.user.id,
       eventId: id,
       status: "confirmed",
+
+      // Required by RegistrationDoc schema
+      verificationToken: crypto.randomUUID(),
+
       qrCode: null,
       checkedIn: false,
       checkedInAt: null,
@@ -101,6 +108,7 @@ export async function POST(
     );
   } catch (error) {
     console.error("QR register error:", error);
+
     return NextResponse.json(
       { error: "Failed to register" },
       { status: 500 }
