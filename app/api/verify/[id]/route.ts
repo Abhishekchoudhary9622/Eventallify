@@ -11,19 +11,14 @@ export async function GET(
     const { id } = await params;
     const cleanId = id.trim();
 
-    const queryConditions = [
-      { id: cleanId },
-      { id: cleanId.toUpperCase() },
-      { certificateId: cleanId },
-      { certificateId: cleanId.toUpperCase() },
-      { certificateNumber: cleanId },
-      { certificateNumber: cleanId.toUpperCase() },
-      { verificationCode: cleanId },
-      { verificationCode: cleanId.toUpperCase() },
-    ];
-
+    // Find certificate using either certificate ID or verification code
     const cert = await collections.certificates().findOne({
-      $or: queryConditions,
+      $or: [
+        { id: cleanId },
+        { id: cleanId.toUpperCase() },
+        { verificationCode: cleanId },
+        { verificationCode: cleanId.toUpperCase() },
+      ],
     });
 
     if (!cert) {
@@ -36,7 +31,8 @@ export async function GET(
       );
     }
 
-    let event: any = null;
+    // Find the associated event
+    let event = null;
 
     if (cert.eventId) {
       event = await collections.events().findOne({
@@ -48,31 +44,22 @@ export async function GET(
       valid: true,
       certificate: {
         _id: cert._id,
-        id: cert.id || cert.certificateNumber,
-        certificateNumber:
-          cert.certificateNumber ||
-          cert.verificationCode ||
-          cert.id,
-        studentName: cert.studentName || cert.userName,
-        userName: cert.studentName || cert.userName,
-        userEmail: cert.userEmail,
+        id: cert.id,
+        certificateNumber: cert.id,
+        studentName: cert.studentName,
+        userName: cert.studentName,
+        userEmail: cert.studentEmail,
+        studentEmail: cert.studentEmail,
         eventTitle: cert.eventTitle,
         eventId: cert.eventId,
-        eventDate: cert.eventDate || cert.issueDate,
-        issueDate:
-          cert.issueDate ||
-          cert.eventDate ||
-          cert.createdAt,
-        organizerName: cert.organizerName || "VIT Chennai",
-        verificationCode:
-          cert.verificationCode ||
-          cert.certificateNumber,
-        qrVerifyPayload: cert.qrVerifyPayload,
+        eventDate: cert.eventDate,
+        issueDate: cert.issuedAt,
+        issuedAt: cert.issuedAt,
+        organizerName: cert.organizerName,
+        verificationCode: cert.verificationCode,
+        qrVerifyPayload: cert.verificationCode,
         venue: event?.venue || "Campus Main Hall",
-        category:
-          cert.category ||
-          event?.category ||
-          "Workshop",
+        category: event?.category || "Workshop",
       },
     });
   } catch (error) {
