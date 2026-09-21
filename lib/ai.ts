@@ -1,8 +1,52 @@
 import Groq from "groq-sdk";
 import { EventDoc } from "@/db/schema";
 
-const groqApiKey = process.env.GROQ_API_KEY?.trim();
-const groq = groqApiKey ? new Groq({ apiKey: groqApiKey }) : null;
+export function getGroqApiKeys(): string[] {
+  const raw = process.env.GROQ_API_KEYS || process.env.GROQ_API_KEY || "";
+  return raw
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+}
+
+export function getGroqClient(index = 0): Groq | null {
+  const keys = getGroqApiKeys();
+  if (!keys.length) return null;
+  return new Groq({ apiKey: keys[index % keys.length] });
+}
+
+export const GROQ_MODELS = [
+  "qwen/qwen3.8-27b",
+  "groq/compound-mini",
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant",
+];
+
+export async function executeWithGroqFallback<T>(
+  fn: (groq: Groq, model: string) => Promise<T>
+): Promise<T | null> {
+  const keys = getGroqApiKeys();
+  if (!keys.length) return null;
+
+  let lastError: any = null;
+  for (const key of keys) {
+    for (const model of GROQ_MODELS) {
+      try {
+        const client = new Groq({ apiKey: key });
+        const res = await fn(client, model);
+        if (res !== null && res !== undefined) return res;
+      } catch (err: any) {
+        lastError = err;
+        // If it's a model not found error, try next model; otherwise try next key
+        if (!err?.message?.includes("does not exist") && !err?.message?.includes("model_not_found")) {
+          break; // Try next key
+        }
+      }
+    }
+  }
+  console.warn("[AI] All Groq attempts failed. Falling back to algorithmic fallback.", lastError?.message || lastError);
+  return null;
+}
 
 export async function getAIRecommendations({
   userInterests = [],
@@ -15,10 +59,9 @@ export async function getAIRecommendations({
 }) {
   if (!upcomingEvents.length) return [];
 
-  // If Groq is available, ask for smart scoring and personalized reason
-  if (groq) {
-    try {
-      const prompt = `
+  // Try LLM recommendation with key fallback
+  const aiResult = await executeWithGroqFallback(async (groq, model) => {
+    const prompt = `
 You are Eventallify AI, a smart campus event assistant.
 User interests: ${userInterests.join(", ") || "General campus events, tech, cultural, sports"}
 User registered categories: ${userRegisteredCategories.join(", ") || "None"}
@@ -37,22 +80,24 @@ Select the top 3-4 most relevant events for this student. Return JSON array stri
 Only valid JSON without markdown wrapping.
 `;
 
-      const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      });
+    const response = await groq.chat.completions.create({
+      model,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+    });
 
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        const parsed = JSON.parse(content);
-        const list = Array.isArray(parsed) ? parsed : parsed.recommendations || [];
-        return list;
-      }
-    } catch (err) {
-      console.warn("[AI] Groq recommendation fallback:", err);
+    const content = response.choices[0]?.message?.content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      const list = Array.isArray(parsed) ? parsed : parsed.recommendations || [];
+      return list;
     }
+    return null;
+  });
+
+  if (aiResult && aiResult.length > 0) {
+    return aiResult;
   }
 
   // Smart Algorithmic Fallback
@@ -98,30 +143,28 @@ export async function generateAIDescription({
   category: string;
   targetAudience?: string;
 }) {
-  if (groq) {
-    try {
-      const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You write engaging, professional descriptions for college campus events. Return a clean 2-3 paragraph description suitable for a student platform.",
-          },
-          {
-            role: "user",
-            content: `Write an engaging description for a college event titled "${title}", Category: "${category}", Target audience: "${targetAudience || "All college students"}".`,
-          },
-        ],
-        temperature: 0.7,
-      });
+  const result = await executeWithGroqFallback(async (groq, model) => {
+    const response = await groq.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write engaging, professional descriptions for college campus events. Return a clean 2-3 paragraph description suitable for a student platform.",
+        },
+        {
+          role: "user",
+          content: `Write an engaging description for a college event titled "${title}", Category: "${category}", Target audience: "${targetAudience || "All college students"}".`,
+        },
+      ],
+      temperature: 0.7,
+    });
 
-      const text = response.choices[0]?.message?.content;
-      if (text) return text.trim();
-    } catch (e) {
-      console.warn("[AI] Groq description fallback:", e);
-    }
-  }
+    const text = response.choices[0]?.message?.content;
+    return text ? text.trim() : null;
+  });
+
+  if (result) return result;
 
   return `Join us for "${title}", one of this semester's most anticipated ${category} events on campus! Designed specifically for passionate students and enthusiasts, this event offers a hands-on environment to learn, network, and showcase your skills.\n\nWhether you are looking to gain practical industry insights, collaborate with peers on exciting projects, or simply experience the vibrant campus spirit, "${title}" is the perfect opportunity. Attendees will have the chance to interact directly with mentors and peers.\n\nSeats are limited to maintain quality interaction. Register now to secure your digital pass and be part of this memorable campus milestone!`;
 }
@@ -133,35 +176,35 @@ export async function suggestAISchedule({
   title: string;
   category: string;
 }) {
-  if (groq) {
-    try {
-      const response = await groq.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        messages: [
-          {
-            role: "system",
-            content:
-              "You are an event planning assistant. Return a JSON array of 4-6 agenda items with keys: time (string), activity (string), speaker (optional string). Output ONLY JSON.",
-          },
-          {
-            role: "user",
-            content: `Suggest a realistic event agenda schedule for: "${title}" (${category}).`,
-          },
-        ],
-        temperature: 0.5,
-        response_format: { type: "json_object" },
-      });
+  const result = await executeWithGroqFallback(async (groq, model) => {
+    const response = await groq.chat.completions.create({
+      model,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are an event planning assistant. Return a JSON array of 4-6 agenda items with keys: time (string), activity (string), speaker (optional string). Output ONLY JSON.",
+        },
+        {
+          role: "user",
+          content: `Suggest a realistic event agenda schedule for: "${title}" (${category}).`,
+        },
+      ],
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+    });
 
-      const content = response.choices[0]?.message?.content;
-      if (content) {
-        const parsed = JSON.parse(content);
-        const schedule = Array.isArray(parsed) ? parsed : parsed.schedule || parsed.items || [];
-        if (schedule.length) return schedule;
-      }
-    } catch (e) {
-      console.warn("[AI] Groq schedule fallback:", e);
+
+    const content = response.choices[0]?.message?.content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      const schedule = Array.isArray(parsed) ? parsed : parsed.schedule || parsed.items || [];
+      if (schedule.length) return schedule;
     }
-  }
+    return null;
+  });
+
+  if (result) return result;
 
   return [
     { time: "09:30 AM", activity: "Attendee Check-in & Welcome Kit Distribution", speaker: "Organizing Team" },
@@ -227,3 +270,4 @@ export async function generateAIAnnouncement({
     priority: "normal" as const,
   };
 }
+

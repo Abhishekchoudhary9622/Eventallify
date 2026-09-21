@@ -1,21 +1,14 @@
 import Groq from "groq-sdk";
 import { NextRequest } from "next/server";
+import { getGroqApiKeys } from "@/lib/ai";
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+const SYSTEM_PROMPT = `You are the Eventallify Assistant, a helpful AI chatbot for a modern college event management platform.
+Eventallify lets students discover, register for, and track campus events, with QR-code digital passes,
+calendar views, verifiable certificates, and admin-posted announcements. Admins and organizers can create events, manage registrations, track attendance, and send announcements.
 
-const SYSTEM_PROMPT = `You are the Eventallify Assistant, a helpful chatbot for a college event management platform.
-Eventallify lets students discover, register for, and track campus events, with QR-code tickets,
-a calendar view, and admin-posted announcements. Admins can create events, manage registrations,
-and send announcements.
-
-You currently do NOT have access to live event data or user accounts, so:
-- Don't claim to know specific event dates, times, or registration counts.
-- If asked about specific live data, tell the user to check the Events or Calendar page,
-  or their Dashboard.
-- You CAN help with: general questions about how the platform works, event-planning advice,
-  writing announcement text, troubleshooting registration/login issues at a general level,
-  and friendly small talk.
-Keep answers concise and friendly.`;
+You are friendly, knowledgeable, and proactive:
+- You help with: campus event planning, registration guidance, digital pass FAQs, writing event announcements, advice for hackathons/workshops, and general questions.
+- Keep answers engaging, helpful, and concise.`;
 
 export async function POST(req: NextRequest) {
   try {
@@ -24,24 +17,50 @@ export async function POST(req: NextRequest) {
     if (!Array.isArray(messages)) {
       return new Response(
         JSON.stringify({ error: "messages must be an array" }),
-        { status: 400 },
+        { status: 400 }
       );
     }
 
-    if (!process.env.GROQ_API_KEY) {
-      console.error("GROQ_API_KEY is not set");
+    const keys = getGroqApiKeys();
+    if (!keys.length) {
+      console.error("[AI Chat] No GROQ API keys configured");
       return new Response(
-        JSON.stringify({ error: "Server misconfigured: missing API key" }),
-        { status: 500 },
+        JSON.stringify({ error: "Server misconfigured: missing GROQ API key" }),
+        { status: 500 }
       );
     }
 
-    const stream = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
-      stream: true,
-      temperature: 0.7,
-    });
+    const models = ["qwen/qwen3.8-27b", "groq/compound-mini", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+    let stream: any = null;
+    let lastError: any = null;
+
+    keyLoop: for (const key of keys) {
+      for (const model of models) {
+        try {
+          const client = new Groq({ apiKey: key });
+          stream = await client.chat.completions.create({
+            model,
+            messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+            stream: true,
+            temperature: 0.7,
+          });
+          if (stream) break keyLoop;
+        } catch (err: any) {
+          lastError = err;
+          if (!err?.message?.includes("does not exist") && !err?.message?.includes("model_not_found")) {
+            break; // Try next key
+          }
+        }
+      }
+    }
+
+    if (!stream) {
+      console.error("[AI Chat] All Groq keys failed to start stream:", lastError);
+      return new Response(
+        JSON.stringify({ error: "AI service currently unavailable. Please try again." }),
+        { status: 500 }
+      );
+    }
 
     const encoder = new TextEncoder();
     const readable = new ReadableStream({
@@ -53,6 +72,7 @@ export async function POST(req: NextRequest) {
           }
           controller.close();
         } catch (err) {
+          console.error("[AI Chat] Streaming chunk error:", err);
           controller.error(err);
         }
       },
@@ -65,7 +85,7 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("Chat API error:", err);
+    console.error("[AI Chat] API error:", err);
     return new Response(JSON.stringify({ error: "Something went wrong" }), {
       status: 500,
     });

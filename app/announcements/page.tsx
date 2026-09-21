@@ -61,9 +61,9 @@ export default function AnnouncementsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {announcements.map((ann) => (
+          {announcements.map((ann, idx) => (
             <div
-              key={ann.id}
+              key={ann.id || (ann as any)._id || idx}
               className="rounded-xl border bg-card p-6 space-y-3"
             >
               <div className="flex items-center justify-between gap-4">
