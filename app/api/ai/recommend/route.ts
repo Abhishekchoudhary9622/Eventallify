@@ -12,7 +12,6 @@ export async function GET(request: NextRequest) {
       headers: request.headers,
     });
 
-    // Fetch upcoming published events
     const upcomingEvents = await collections
       .events()
       .find({
@@ -24,7 +23,9 @@ export async function GET(request: NextRequest) {
       .toArray();
 
     if (upcomingEvents.length === 0) {
-      return NextResponse.json({ recommendations: [] });
+      return NextResponse.json({
+        recommendations: [],
+      });
     }
 
     let userInterests: string[] = [];
@@ -67,7 +68,9 @@ export async function GET(request: NextRequest) {
 
       userRegisteredCategories = userRegs
         .map((r) => r.category)
-        .filter((category): category is string => Boolean(category));
+        .filter(
+          (category): category is string => Boolean(category)
+        );
     }
 
     const recs = await getAIRecommendations({
@@ -97,11 +100,7 @@ export async function GET(request: NextRequest) {
           matchReason: recommendation.matchReason,
         };
       })
-      .filter(
-        (
-          event
-        ): event is NonNullable<typeof event> => event !== null
-      );
+      .filter(Boolean);
 
     return NextResponse.json({
       recommendations: enriched,
