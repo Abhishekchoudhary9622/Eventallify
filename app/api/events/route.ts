@@ -6,10 +6,14 @@ import { getEventImageUrl } from "@/lib/event-images";
 
 export async function GET(request: NextRequest) {
   try {
-    await ensureIndexes();
-    const session = await auth.api.getSession({
-      headers: request.headers,
-    });
+    ensureIndexes();
+
+    const cookieHeader = request.headers.get("cookie") || "";
+    const hasAuthCookie = cookieHeader.includes("session_token");
+
+    const session = hasAuthCookie
+      ? await auth.api.getSession({ headers: request.headers }).catch(() => null)
+      : null;
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
@@ -17,8 +21,8 @@ export async function GET(request: NextRequest) {
     const upcoming = searchParams.get("upcoming") === "true";
     const statusParam = searchParams.get("status") || "";
     const organizerOnly = searchParams.get("organizerOnly") === "true";
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "12");
+    const page = Math.max(1, parseInt(searchParams.get("page") || "1"));
+    const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "12")));
     const skip = (page - 1) * limit;
 
     const filter: Record<string, any> = {};
@@ -38,7 +42,6 @@ export async function GET(request: NextRequest) {
     }
 
     const isAdmin = (session?.user as any)?.role === "admin";
-    const isOrganizer = (session?.user as any)?.role === "organizer";
 
     if (organizerOnly && session) {
       filter.createdBy = session.user.id;
@@ -46,7 +49,6 @@ export async function GET(request: NextRequest) {
     } else if (statusParam) {
       filter.status = statusParam;
     } else if (!isAdmin) {
-      // Students / Public only see published, completed, or approved events
       filter.status = { $in: ["published", "completed", "approved"] };
     }
 
@@ -61,35 +63,52 @@ export async function GET(request: NextRequest) {
       eventsCol.countDocuments(filter),
     ]);
 
-    // Fetch user bookmarks & registration counts if logged in
-    let userBookmarks = new Set<string>();
-    let userRegistrations = new Map<string, string>();
+    const eventIds = allEvents.map((e) => e.id || String(e._id));
 
-    if (session) {
-      const [bks, regs] = await Promise.all([
-        collections.bookmarks().find({ userId: session.user.id }).toArray(),
-        collections.registrations().find({ userId: session.user.id }).toArray(),
-      ]);
-      bks.forEach((b) => userBookmarks.add(b.eventId));
-      regs.forEach((r) => userRegistrations.set(r.eventId, r.status));
-    }
+    // Parallel batch lookup: 1 aggregate query for all registration counts + user data
+    const [bks, regs, countsAgg] = await Promise.all([
+      session
+        ? collections.bookmarks().find({ userId: session.user.id }).toArray()
+        : Promise.resolve([]),
+      session
+        ? collections.registrations().find({ userId: session.user.id }).toArray()
+        : Promise.resolve([]),
+      eventIds.length > 0
+        ? collections.registrations().aggregate([
+            { $match: { eventId: { $in: eventIds }, status: "confirmed" } },
+            { $group: { _id: "$eventId", count: { $sum: 1 } } },
+          ]).toArray()
+        : Promise.resolve([]),
+    ]);
 
-    // Attach registration counts, bookmark flag, and resolved image URLs
-    const eventsWithMeta = await Promise.all(
-      allEvents.map(async (event) => {
-        const count = await collections
-          .registrations()
-          .countDocuments({ eventId: event.id, status: "confirmed" });
+    const countMap = new Map<string, number>();
+    countsAgg.forEach((c: any) => countMap.set(String(c._id), c.count));
 
-        return {
-          ...event,
-          imageUrl: getEventImageUrl(event.imageUrl, event.category),
-          registrationCount: count,
-          isBookmarked: userBookmarks.has(event.id),
-          userRegistrationStatus: userRegistrations.get(event.id) || null,
-        };
-      })
-    );
+    const userBookmarks = new Set<string>();
+    const userRegistrations = new Map<string, string>();
+    bks.forEach((b) => userBookmarks.add(b.eventId));
+    regs.forEach((r) => userRegistrations.set(r.eventId, r.status));
+
+    const eventsWithMeta = allEvents.map((event) => {
+      const canonicalId = event.id || String(event._id);
+      const count =
+        countMap.get(canonicalId) ||
+        countMap.get(event.id) ||
+        countMap.get(String(event._id)) ||
+        0;
+
+      return {
+        ...event,
+        id: canonicalId,
+        imageUrl: getEventImageUrl(event.imageUrl, event.category),
+        registrationCount: count,
+        isBookmarked: userBookmarks.has(canonicalId) || userBookmarks.has(event.id),
+        userRegistrationStatus:
+          userRegistrations.get(canonicalId) ||
+          userRegistrations.get(event.id) ||
+          null,
+      };
+    });
 
     return NextResponse.json({
       events: eventsWithMeta,
@@ -111,7 +130,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await ensureIndexes();
+    ensureIndexes();
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -121,7 +140,6 @@ export async function POST(request: NextRequest) {
     }
 
     const userRole = (session.user as any).role || "student";
-    // Allow admin or organizer to create events (students can also create as draft/pending if permitted)
     const body = await request.json();
     const {
       title,
@@ -154,7 +172,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Admins can publish directly; Organizers submit for approval or save as draft
     let initialStatus = requestedStatus || "pending_approval";
     if (userRole === "admin") {
       initialStatus = requestedStatus || "published";
@@ -192,7 +209,6 @@ export async function POST(request: NextRequest) {
 
     await collections.events().insertOne(newEvent);
 
-    // If submitted for approval, create a notification for admins
     if (initialStatus === "pending_approval") {
       const adminUsers = await collections.users().find({ role: "admin" }).toArray();
       for (const admin of adminUsers) {

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { collections, ensureIndexes } from "@/lib/db";
-import { ObjectId } from "mongodb";
 
 export async function GET(request: NextRequest) {
   try {
-    await ensureIndexes();
+    ensureIndexes();
     const session = await auth.api.getSession({
       headers: request.headers,
     });
@@ -22,48 +21,48 @@ export async function GET(request: NextRequest) {
       totalRegistrations,
       totalUsers,
       totalAnnouncements,
-      allEvents,
-      allRegistrations,
+      categoryStats,
+      popularStats,
     ] = await Promise.all([
       collections.events().countDocuments(),
-      collections.events().countDocuments({
-        date: { $gte: now },
-      }),
+      collections.events().countDocuments({ date: { $gte: now } }),
       collections.registrations().countDocuments(),
       collections.users().countDocuments(),
       collections.announcements().countDocuments(),
-      collections.events().find({}).toArray(),
-      collections.registrations().find({}).toArray(),
+      collections.events().aggregate([
+        { $group: { _id: "$category", count: { $sum: 1 } } },
+      ]).toArray(),
+      collections.registrations().aggregate([
+        { $match: { status: "confirmed" } },
+        { $group: { _id: "$eventId", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+        {
+          $lookup: {
+            from: "events",
+            localField: "_id",
+            foreignField: "id",
+            as: "eventDoc",
+          },
+        },
+        { $unwind: { path: "$eventDoc", preserveNullAndEmptyArrays: true } },
+        {
+          $project: {
+            eventTitle: { $ifNull: ["$eventDoc.title", "Campus Event"] },
+            count: 1,
+          },
+        },
+      ]).toArray(),
     ]);
 
-    // Map registrations by event
-    const regCountsMap: Record<string, { eventTitle: string; count: number }> = {};
-    for (const reg of allRegistrations) {
-      const eId = reg.eventId;
-      const matchedEvent = allEvents.find(
-        (e) => e.id === eId || e._id?.toString() === eId
-      );
-      const title = matchedEvent?.title || "Special Event";
-      if (!regCountsMap[title]) {
-        regCountsMap[title] = { eventTitle: title, count: 0 };
-      }
-      regCountsMap[title].count++;
-    }
+    const categoryCounts = categoryStats.map((c: any) => ({
+      category: c._id || "General",
+      count: c.count,
+    }));
 
-    const registrationsByEvent = Object.values(regCountsMap)
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-
-    // Group events by category
-    const catCountsMap: Record<string, number> = {};
-    for (const e of allEvents) {
-      const cat = e.category || "General";
-      catCountsMap[cat] = (catCountsMap[cat] || 0) + 1;
-    }
-
-    const categoryCounts = Object.entries(catCountsMap).map(([category, count]) => ({
-      category,
-      count,
+    const registrationsByEvent = popularStats.map((p: any) => ({
+      eventTitle: p.eventTitle,
+      count: p.count,
     }));
 
     return NextResponse.json({

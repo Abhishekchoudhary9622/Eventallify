@@ -43,9 +43,18 @@ function EventsContent() {
   const [events, setEvents] = useState<EventData[]>([]);
   const [pagination, setPagination] = useState<Pagination | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState(searchParams.get("search") || "");
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [category, setCategory] = useState(searchParams.get("category") || "all");
   const [page, setPage] = useState(parseInt(searchParams.get("page") || "1"));
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearch(searchInput);
+      setPage(1);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [searchInput]);
 
   const fetchEvents = useCallback(async () => {
     setLoading(true);
@@ -88,16 +97,13 @@ function EventsContent() {
           <input
             type="text"
             placeholder="Search events..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             className="flex h-10 w-full rounded-lg border bg-background pl-10 pr-10 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
-          {search && (
+          {searchInput && (
             <button
-              onClick={() => { setSearch(""); setPage(1); }}
+              onClick={() => { setSearchInput(""); setSearch(""); setPage(1); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
               <X className="size-4" />
