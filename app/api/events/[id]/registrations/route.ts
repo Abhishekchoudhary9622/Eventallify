@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { collections } from "@/lib/db";
+import { collections, buildIdQuery } from "@/lib/db";
+import { EventDoc } from "@/db/schema";
 
 export async function GET(
   request: NextRequest,
@@ -7,11 +8,14 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
+    const canonicalId = event?.id || id;
+    const idList = Array.from(new Set([id, canonicalId, event ? String(event._id) : ""].filter(Boolean)));
 
     const regs = await collections
       .registrations()
       .aggregate([
-        { $match: { eventId: id } },
+        { $match: { eventId: { $in: idList } } },
         {
           $lookup: {
             from: "user",

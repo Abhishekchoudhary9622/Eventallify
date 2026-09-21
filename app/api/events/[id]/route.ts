@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { EventDoc } from "@/db/schema";
 import { getEventImageUrl } from "@/lib/event-images";
 
 export async function GET(
@@ -14,11 +15,14 @@ export async function GET(
     });
 
     const { id } = await params;
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
 
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     const [
       registrationCount,
@@ -27,14 +31,14 @@ export async function GET(
       userRegistration,
       userBookmark,
     ] = await Promise.all([
-      collections.registrations().countDocuments({ eventId: id, status: "confirmed" }),
-      collections.registrations().countDocuments({ eventId: id, status: "waitlisted" }),
-      collections.feedback().find({ eventId: id }).sort({ createdAt: -1 }).toArray(),
+      collections.registrations().countDocuments({ eventId: { $in: idList }, status: "confirmed" }),
+      collections.registrations().countDocuments({ eventId: { $in: idList }, status: "waitlisted" }),
+      collections.feedback().find({ eventId: { $in: idList } }).sort({ createdAt: -1 }).toArray(),
       session
-        ? collections.registrations().findOne({ eventId: id, userId: session.user.id })
+        ? collections.registrations().findOne({ eventId: { $in: idList }, userId: session.user.id })
         : Promise.resolve(null),
       session
-        ? collections.bookmarks().findOne({ eventId: id, userId: session.user.id })
+        ? collections.bookmarks().findOne({ eventId: { $in: idList }, userId: session.user.id })
         : Promise.resolve(null),
     ]);
 
@@ -50,6 +54,7 @@ export async function GET(
 
     return NextResponse.json({
       ...event,
+      id: canonicalId,
       imageUrl: getEventImageUrl(event.imageUrl, event.category),
       registrationCount,
       waitlistCount,
@@ -92,7 +97,7 @@ export async function PUT(
     }
 
     const { id } = await params;
-    const existing = await collections.events().findOne({ id });
+    const existing = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!existing) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
@@ -132,7 +137,7 @@ export async function PUT(
     const result = await collections
       .events()
       .findOneAndUpdate(
-        { id },
+        buildIdQuery<EventDoc>(id),
         { $set: updateData },
         { returnDocument: "after" }
       );
@@ -161,7 +166,7 @@ export async function DELETE(
     }
 
     const { id } = await params;
-    const existing = await collections.events().findOne({ id });
+    const existing = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!existing) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
@@ -174,14 +179,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    await collections.events().deleteOne({ id });
+    const canonicalId = existing.id || String(existing._id);
+    const idList = Array.from(new Set([id, canonicalId, String(existing._id)].filter(Boolean)));
+
+    await collections.events().deleteOne(buildIdQuery<EventDoc>(id));
 
     // Clean up associated registrations, bookmarks, certificates, feedback
     await Promise.all([
-      collections.registrations().deleteMany({ eventId: id }),
-      collections.bookmarks().deleteMany({ eventId: id }),
-      collections.certificates().deleteMany({ eventId: id }),
-      collections.feedback().deleteMany({ eventId: id }),
+      collections.registrations().deleteMany({ eventId: { $in: idList } }),
+      collections.bookmarks().deleteMany({ eventId: { $in: idList } }),
+      collections.certificates().deleteMany({ eventId: { $in: idList } }),
+      collections.feedback().deleteMany({ eventId: { $in: idList } }),
     ]);
 
     return NextResponse.json({ success: true });

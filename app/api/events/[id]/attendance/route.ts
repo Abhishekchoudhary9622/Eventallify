@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { EventDoc } from "@/db/schema";
 
 export async function GET(
   request: NextRequest,
@@ -17,10 +18,13 @@ export async function GET(
     }
 
     const { id } = await params;
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     const userRole = (session.user as any).role || "student";
     const isOwner = event.createdBy === session.user.id;
@@ -32,7 +36,7 @@ export async function GET(
 
     const registrations = await collections
       .registrations()
-      .find({ eventId: id })
+      .find({ eventId: { $in: idList } })
       .sort({ registeredAt: -1 })
       .toArray();
 
@@ -49,7 +53,7 @@ export async function GET(
 
     return NextResponse.json({
       event: {
-        id: event.id,
+        id: canonicalId,
         title: event.title,
         date: event.date,
         venue: event.venue,

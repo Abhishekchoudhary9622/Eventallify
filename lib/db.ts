@@ -1,4 +1,14 @@
-import { MongoClient, Db } from "mongodb";
+import { MongoClient, Db, ObjectId, Filter } from "mongodb";
+
+export function buildIdQuery<T = any>(id: string): Filter<T> {
+  if (!id) return { id } as unknown as Filter<T>;
+  if (ObjectId.isValid(id) && String(new ObjectId(id)) === id) {
+    return {
+      $or: [{ id }, { _id: new ObjectId(id) }],
+    } as unknown as Filter<T>;
+  }
+  return { id } as unknown as Filter<T>;
+}
 import {
   UserDoc,
   SessionDoc,

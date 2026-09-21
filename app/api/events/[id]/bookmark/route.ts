@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
-import { BookmarkDoc } from "@/db/schema";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { BookmarkDoc, EventDoc } from "@/db/schema";
 
 export async function POST(
   request: NextRequest,
@@ -18,9 +18,13 @@ export async function POST(
     }
 
     const { id } = await params;
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
+    const canonicalId = event?.id || id;
+    const idList = Array.from(new Set([id, canonicalId, event ? String(event._id) : ""].filter(Boolean)));
+
     const existing = await collections.bookmarks().findOne({
       userId: session.user.id,
-      eventId: id,
+      eventId: { $in: idList },
     });
 
     if (existing) {
@@ -32,7 +36,7 @@ export async function POST(
       const bookmark: BookmarkDoc = {
         id: crypto.randomUUID(),
         userId: session.user.id,
-        eventId: id,
+        eventId: canonicalId,
         createdAt: new Date(),
       };
       await collections.bookmarks().insertOne(bookmark);

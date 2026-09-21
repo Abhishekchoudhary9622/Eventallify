@@ -7,10 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:generate": "drizzle-kit generate --config ./db/drizzle.config.ts",
-    "db:migrate": "drizzle-kit migrate --config ./db/drizzle.config.ts",
-    "db:push": "drizzle-kit push --config ./db/drizzle.config.ts",
-    "db:seed": "tsx db/seed.ts",
     "db:make-admin": "tsx db/make-admin.ts"
   },
   "dependencies": {

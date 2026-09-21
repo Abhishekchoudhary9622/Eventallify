@@ -279,19 +279,19 @@ export default function OrganizerDashboardPage() {
                   {/* Right: Quick Action Hub */}
                   <div className="flex items-center gap-2 shrink-0 self-center lg:self-center">
                     <Button asChild size="sm" variant="default" className="gap-1.5">
-                      <Link href={`/organizer/events/${event._id}/attendance`}>
+                      <Link href={`/organizer/events/${event.id || event._id}/attendance`}>
                         <QrCode className="size-4" /> QR Check-in
                       </Link>
                     </Button>
 
                     <Button asChild size="sm" variant="outline" className="gap-1.5">
-                      <Link href={`/organizer/events/${event._id}/analytics`}>
+                      <Link href={`/organizer/events/${event.id || event._id}/analytics`}>
                         <BarChart3 className="size-4" /> Analytics
                       </Link>
                     </Button>
 
                     <Button asChild size="icon" variant="ghost" className="size-9">
-                      <Link href={`/events/${event._id}`} title="View Public Page">
+                      <Link href={`/events/${event.id || event._id}`} title="View Public Page">
                         <ExternalLink className="size-4" />
                       </Link>
                     </Button>

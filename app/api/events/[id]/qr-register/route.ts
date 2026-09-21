@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
-import { RegistrationDoc } from "@/db/schema";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { RegistrationDoc, EventDoc } from "@/db/schema";
 
 export async function POST(
   request: NextRequest,
@@ -31,7 +31,7 @@ export async function POST(
 
     const { id } = await params;
 
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
 
     if (!event) {
       return NextResponse.json(
@@ -39,6 +39,9 @@ export async function POST(
         { status: 404 }
       );
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     if (new Date(event.registrationDeadline) < new Date()) {
       return NextResponse.json(
@@ -56,7 +59,7 @@ export async function POST(
 
     const existing = await collections.registrations().findOne({
       userId: session.user.id,
-      eventId: id,
+      eventId: { $in: idList },
     });
 
     if (existing) {
@@ -72,7 +75,7 @@ export async function POST(
     if (event.maxParticipants) {
       const count = await collections
         .registrations()
-        .countDocuments({ eventId: id });
+        .countDocuments({ eventId: { $in: idList } });
 
       if (count >= event.maxParticipants) {
         return NextResponse.json(
@@ -85,7 +88,7 @@ export async function POST(
     const newReg: RegistrationDoc = {
       id: crypto.randomUUID(),
       userId: session.user.id,
-      eventId: id,
+      eventId: canonicalId,
       status: "confirmed",
       verificationToken: crypto.randomUUID(),
       qrCode: null,

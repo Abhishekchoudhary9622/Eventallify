@@ -39,7 +39,7 @@ export function EventCard({
   isBookmarkedInitial = false,
   onBookmarkToggle,
 }: EventCardProps) {
-  const eventId = event._id || event.id || "";
+  const eventId = event.id || event._id || "";
   const rawDate = event.startDate || event.date;
 
   let eventDate: Date | null = null;

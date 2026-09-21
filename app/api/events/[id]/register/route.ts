@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
-import { RegistrationDoc } from "@/db/schema";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { RegistrationDoc, EventDoc } from "@/db/schema";
 import { sendEventRegistrationEmail } from "@/lib/email";
 import QRCode from "qrcode";
 import { format } from "date-fns";
@@ -36,10 +36,13 @@ export async function POST(
     const body = await request.json().catch(() => ({}));
     const { department, collegeYear, customAnswers } = body;
 
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     if (new Date(event.registrationDeadline) < new Date()) {
       return NextResponse.json(
@@ -57,7 +60,7 @@ export async function POST(
 
     const existing = await collections.registrations().findOne({
       userId: session.user.id,
-      eventId: id,
+      eventId: { $in: idList },
     });
 
     if (existing) {
@@ -80,7 +83,7 @@ export async function POST(
 
     const confirmedCount = await collections
       .registrations()
-      .countDocuments({ eventId: id, status: "confirmed" });
+      .countDocuments({ eventId: { $in: idList }, status: "confirmed" });
 
     const isFull =
       event.maxParticipants && confirmedCount >= event.maxParticipants;
@@ -98,7 +101,7 @@ export async function POST(
       registrationStatus = "waitlisted";
       const currentWaitlistCount = await collections
         .registrations()
-        .countDocuments({ eventId: id, status: "waitlisted" });
+        .countDocuments({ eventId: { $in: idList }, status: "waitlisted" });
       waitlistPosition = currentWaitlistCount + 1;
     }
 
@@ -109,7 +112,7 @@ export async function POST(
     const qrPayload = JSON.stringify({
       v: "1",
       regId,
-      eventId: id,
+      eventId: canonicalId,
       t: verificationToken,
     });
 
@@ -122,7 +125,7 @@ export async function POST(
     const newReg: RegistrationDoc = {
       id: regId,
       userId: session.user.id,
-      eventId: id,
+      eventId: canonicalId,
       status: registrationStatus,
       waitlistPosition,
       customAnswers: customAnswers || {},
@@ -168,7 +171,7 @@ export async function POST(
           eventVenue: event.venue,
           eventDescription: event.description,
           registrationId: regId,
-          eventId: id,
+          eventId: canonicalId,
         });
       } catch (err) {
         console.warn("[email] Registration email notice:", err);

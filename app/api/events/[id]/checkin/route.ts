@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { EventDoc } from "@/db/schema";
 
 export async function POST(
   request: NextRequest,
@@ -17,10 +18,13 @@ export async function POST(
     }
 
     const { id } = await params;
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     const userRole = (session.user as any).role || "student";
     const isOwner = event.createdBy === session.user.id;
@@ -55,7 +59,7 @@ export async function POST(
         resolvedRegId = qrData.regId || qrData.registrationId || qrData.id;
         qrToken = qrData.t || qrData.token;
 
-        if (qrData.eventId && qrData.eventId !== id) {
+        if (qrData.eventId && !idList.includes(qrData.eventId)) {
           return NextResponse.json(
             {
               error: `Invalid QR Code: This ticket is for a different event!`,
@@ -84,7 +88,7 @@ export async function POST(
         { id: resolvedRegId.toUpperCase() },
         { _id: resolvedRegId as any },
       ],
-      eventId: id,
+      eventId: { $in: idList },
     });
 
     if (!reg) {

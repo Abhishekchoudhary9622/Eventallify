@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
-import { FeedbackDoc } from "@/db/schema";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { FeedbackDoc, EventDoc } from "@/db/schema";
 
 export async function POST(
   request: NextRequest,
@@ -18,6 +18,10 @@ export async function POST(
     }
 
     const { id } = await params;
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
+    const canonicalId = event?.id || id;
+    const idList = Array.from(new Set([id, canonicalId, event ? String(event._id) : ""].filter(Boolean)));
+
     const body = await request.json();
     const { rating, comment } = body;
 
@@ -29,9 +33,9 @@ export async function POST(
       );
     }
 
-    // Check if attendee was registered & checked in (or confirmed)
+    // Check if attendee was registered & confirmed
     const reg = await collections.registrations().findOne({
-      eventId: id,
+      eventId: { $in: idList },
       userId: session.user.id,
     });
 
@@ -45,7 +49,7 @@ export async function POST(
     const feedbackDoc: FeedbackDoc = {
       id: crypto.randomUUID(),
       userId: session.user.id,
-      eventId: id,
+      eventId: canonicalId,
       rating: numRating,
       comment: comment?.trim() || "",
       userName: session.user.name || "Student",
@@ -54,7 +58,7 @@ export async function POST(
 
     // Upsert feedback
     await collections.feedback().updateOne(
-      { userId: session.user.id, eventId: id },
+      { userId: session.user.id, eventId: { $in: idList } },
       { $set: feedbackDoc },
       { upsert: true }
     );
@@ -79,10 +83,13 @@ export async function GET(
   try {
     await ensureIndexes();
     const { id } = await params;
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
+    const canonicalId = event?.id || id;
+    const idList = Array.from(new Set([id, canonicalId, event ? String(event._id) : ""].filter(Boolean)));
 
     const list = await collections
       .feedback()
-      .find({ eventId: id })
+      .find({ eventId: { $in: idList } })
       .sort({ createdAt: -1 })
       .toArray();
 

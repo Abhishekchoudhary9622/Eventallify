@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
-import { CertificateDoc } from "@/db/schema";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
+import { CertificateDoc, EventDoc } from "@/db/schema";
 
 function generateCertificateId(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -27,10 +27,13 @@ export async function POST(
     }
 
     const { id } = await params;
-    const event = await collections.events().findOne({ id });
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
+
+    const canonicalId = event.id || String(event._id);
+    const idList = Array.from(new Set([id, canonicalId, String(event._id)].filter(Boolean)));
 
     const userRole = (session.user as any).role || "student";
     const isOwner = event.createdBy === session.user.id;
@@ -46,7 +49,7 @@ export async function POST(
     // Find all checked-in attendees
     const attendees = await collections
       .registrations()
-      .find({ eventId: id, status: "confirmed", checkedIn: true })
+      .find({ eventId: { $in: idList }, status: "confirmed", checkedIn: true })
       .toArray();
 
     if (!attendees.length) {
@@ -62,7 +65,7 @@ export async function POST(
     for (const attendee of attendees) {
       const existingCert = await collections.certificates().findOne({
         userId: attendee.userId,
-        eventId: id,
+        eventId: { $in: idList },
       });
 
       if (!existingCert) {
@@ -72,7 +75,7 @@ export async function POST(
         const certDoc: CertificateDoc = {
           id: certId,
           userId: attendee.userId,
-          eventId: id,
+          eventId: canonicalId,
           studentName: attendee.studentName || "Participant",
           studentEmail: attendee.studentEmail,
           eventTitle: event.title,
@@ -102,7 +105,7 @@ export async function POST(
 
     // Mark event as completed if not already
     await collections.events().updateOne(
-      { id },
+      buildIdQuery<EventDoc>(id),
       { $set: { status: "completed", updatedAt: now } }
     );
 
@@ -128,9 +131,13 @@ export async function GET(
   try {
     await ensureIndexes();
     const { id } = await params;
+    const event = await collections.events().findOne(buildIdQuery<EventDoc>(id));
+    const canonicalId = event?.id || id;
+    const idList = Array.from(new Set([id, canonicalId, event ? String(event._id) : ""].filter(Boolean)));
+
     const certs = await collections
       .certificates()
-      .find({ eventId: id })
+      .find({ eventId: { $in: idList } })
       .sort({ issuedAt: -1 })
       .toArray();
 

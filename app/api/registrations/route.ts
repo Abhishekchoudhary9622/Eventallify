@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
 import { getEventImageUrl } from "@/lib/event-images";
 import { sendEventRegistrationEmail } from "@/lib/email";
 import { format } from "date-fns";
@@ -58,7 +58,7 @@ export async function DELETE(request: NextRequest) {
 
       if (nextWaitlisted.length > 0) {
         const promoted = nextWaitlisted[0];
-        const event = await collections.events().findOne({ id: eventId });
+        const event = await collections.events().findOne(buildIdQuery(eventId));
 
         await collections.registrations().updateOne(
           { id: promoted.id },

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { collections, ensureIndexes } from "@/lib/db";
+import { collections, ensureIndexes, buildIdQuery } from "@/lib/db";
 import { getEventImageUrl } from "@/lib/event-images";
 
 export async function GET(request: NextRequest) {
@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const event = await collections.events().findOne({ id: eventId });
+    const event = await collections.events().findOne(buildIdQuery(eventId));
     if (!event) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 });
     }
@@ -90,7 +90,7 @@ export async function POST(request: NextRequest) {
     }
 
     await collections.events().updateOne(
-      { id: eventId },
+      buildIdQuery(eventId),
       {
         $set: {
           status: newStatus,
